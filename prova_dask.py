@@ -139,7 +139,7 @@ def manage_trade(trade_type, data):
 
 def manage_stock(stock):
 
-	trade_types_config = tuple((loss, NO_STOP_GAIN, True) for loss in (i * 0.5 for i in range(1, 5)))
+	trade_types_config = tuple((loss, NO_STOP_GAIN, True) for loss in (i * 0.5 for i in range(1, 21)))
 	trade_types_bag = db.from_sequence(trade_types_config)
 	trade_types_dag = trade_types_bag.map(manage_trade, stock)
 	trade_types = trade_types_dag.compute()
