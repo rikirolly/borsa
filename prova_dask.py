@@ -151,7 +151,7 @@ def do_manage_trading(stocks):
 	stock_trades = stock_trades_dag.compute()
 	return stock_trades
 
-def plot_volume(_open, _high, _low, _close, volume):
+def plot_volume(_open, _high, _low, _close, volume, indicator=None, indicator_name='Indicator'):
     # Crea un indice DatetimeIndex fittizio
     date_range = pd.date_range(start="2023-01-01", periods=len(_open), freq="T")
     
@@ -163,10 +163,46 @@ def plot_volume(_open, _high, _low, _close, volume):
         'Volume': volume
     }, index=date_range)
     
-    # Ora non c'è più bisogno di gestire buy_positions e sell_positions
-    # Si può procedere direttamente con il plot includendo il volume
-    
-    mpf.plot(df, type='candle', style='charles', title='OHLC Candlestick Chart', volume=True)
+    ap = []  # Lista per gli addplot
+
+    # Se è fornito un indicatore, lo aggiungiamo al pannello sotto al volume
+    if indicator is not None:
+        ap.append(mpf.make_addplot(indicator, panel=2, type='line', color='fuchsia', ylabel=indicator_name))
+
+    # Configuriamo i pannelli
+    # 1. Grafico OHLC
+    # 2. Volume
+    # 3. Eventuale indicatore aggiuntivo
+    fig, axes = mpf.plot(df, type='candle', style='charles', title='OHLC Candlestick Chart',
+                         volume_panel=1, panel_ratios=(6, 3, 2), figsize=(10, 8),
+                         addplot=ap, returnfig=True)
+    # Puoi aggiungere ylabel per i volumi se necessario
+    axes[1].set_ylabel('Volume')
+    if indicator is not None:
+        axes[2].set_ylabel(indicator_name)
+
+    # Mostra il grafico
+    mpf.show()
+
+# def plot_volume(_open, _high, _low, _close, volume, additional_data=None):
+# 	# Crea un indice DatetimeIndex fittizio
+# 	date_range = pd.date_range(start="2023-01-01", periods=len(_open), freq="T")
+	
+# 	df = pd.DataFrame({
+# 		'Open': _open,
+# 		'High': _high,
+# 		'Low': _low,
+# 		'Close': _close,
+# 		'Volume': volume
+# 	}, index=date_range)
+	
+# 	ap = []  # Lista per gli addplot
+# 	if additional_data is not None:
+# 		for label, data in additional_data.items():
+# 			ap.append(mpf.make_addplot(data, type='line', color='fuchsia'))
+
+# 	mpf.plot(df, type='candle', style='charles', title='OHLC Candlestick Chart', volume=True, addplot=ap)
+
 
 def plot_ohlc(_open, _high, _low, _close, buy_positions=None, sell_positions=None):
 	# Crea un indice DatetimeIndex fittizio
@@ -239,22 +275,29 @@ if __name__ == '__main__':
 	# 	index += 1
 
 	volume = []
+	positive_volume = []
 	stop_loss_distribution = []
+	best_stop_losses = []
 	
 	for obt in stock_trades[0]:
 		index = 0
 		for trades in obt:
 			num_positive_trade_closed = 0
+			num_trade_closed = 0
 			total_positive_gain = 0
 			for trade in trades:
-				if not trade.open and trade.current_gain > 0:
-					num_positive_trade_closed += 1
-					total_positive_gain += trade.current_gain
+				if not trade.open:
+					if trade.current_gain > 0:
+						num_positive_trade_closed += 1
+						total_positive_gain += trade.current_gain/trade.length
+					num_trade_closed += 1
 				if len(stop_loss_distribution)<len(obt):
-					# volume.append(total_positive_gain)
+					volume.append(num_trade_closed)
+					positive_volume.append(num_positive_trade_closed)
 					stop_loss_distribution.append({trade.trailing_stop_loss: total_positive_gain})
 				else:
-					# volume[index] += total_positive_gain
+					volume[index] += num_trade_closed
+					positive_volume[index] += num_positive_trade_closed
 					stop_loss_distribution[index][trade.trailing_stop_loss] = total_positive_gain
 			index += 1	
 
@@ -264,8 +307,9 @@ if __name__ == '__main__':
 		for k, v in sld.items():
 			if v>max:
 				best_stop_loss = k
-		volume.append(best_stop_loss)
+		best_stop_losses.append(best_stop_loss)
 
 	_open, _high, _low, _close, _bid_ask_spread = zip(*stocks[0])
-	plot_volume(_open, _high, _low, _close, volume)
+
+	plot_volume(_open, _high, _low, _close, volume, positive_volume, 'positive_volume')
 	# plot_ohlc(_open, _high, _low, _close, buy_positions, sell_positions)
